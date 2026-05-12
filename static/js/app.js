@@ -1,4 +1,4 @@
-// AI Tutor - Frontend Logic
+// AI Tutor — Frontend Logic
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -8,50 +8,51 @@ let currentNotes = "";
 let currentFilename = "";
 let isProcessing = false;
 let isEditing = false;
-let chatHistory = []; // multi-turn conversation
-let selectedText = ""; // text selected from notes
-let remainingSteps = []; // for step mode
+let chatHistory = [];
+let selectedText = "";
+let remainingSteps = [];
+let streamBuffer = "";
 
 // DOM
-const inputContent = $("#input-content");
-const fileInput = $("#file-input");
-const btnProcess = $("#btn-process");
-const btnNextStep = $("#btn-next-step");
-const btnStop = $("#btn-stop");
-const progressPanel = $("#progress-panel");
-const progressSpinner = $("#progress-spinner");
-const progressLog = $("#progress-log");
-const notePreview = $("#note-preview");
-const noteEditor = $("#note-editor");
-const btnEdit = $("#btn-edit");
-const btnSave = $("#btn-save");
-const btnExportMd = $("#btn-export-md");
-const btnExportHtml = $("#btn-export-html");
-const chatMessages = $("#chat-messages");
-const chatInput = $("#chat-input");
-const btnSend = $("#btn-send");
-const btnClearChat = $("#btn-clear-chat");
-const btnNotesList = $("#btn-notes-list");
-const notesModal = $("#notes-modal");
-const btnCloseModal = $("#btn-close-modal");
-const notesList = $("#notes-list");
-const notesSearch = $("#notes-search");
-const selectedTextPreview = $("#selected-text-preview");
-const selectedTextContent = $("#selected-text-content");
-const btnClearSelection = $("#btn-clear-selection");
-const wordCount = $("#word-count");
+const els = {
+    input: $("#input-content"),
+    fileInput: $("#file-input"),
+    btnProcess: $("#btn-process"),
+    btnNextStep: $("#btn-next-step"),
+    btnStop: $("#btn-stop"),
+    progressPanel: $("#progress-panel"),
+    progressLog: $("#progress-log"),
+    preview: $("#note-preview"),
+    editor: $("#note-editor"),
+    btnEdit: $("#btn-edit"),
+    btnSave: $("#btn-save"),
+    btnExportMd: $("#btn-export-md"),
+    btnExportHtml: $("#btn-export-html"),
+    chatMsgs: $("#chat-messages"),
+    chatInput: $("#chat-input"),
+    btnSend: $("#btn-send"),
+    btnClearChat: $("#btn-clear-chat"),
+    btnNotesList: $("#btn-notes-list"),
+    modal: $("#notes-modal"),
+    btnCloseModal: $("#btn-close-modal"),
+    notesList: $("#notes-list"),
+    notesSearch: $("#notes-search"),
+    selPreview: $("#selected-text-preview"),
+    selContent: $("#selected-text-content"),
+    btnClearSel: $("#btn-clear-selection"),
+    wordCount: $("#word-count"),
+};
 
 // ==================== File Upload ====================
-fileInput.addEventListener("change", (e) => {
+els.fileInput.addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (e) => { inputContent.value = e.target.result; };
+    reader.onload = (ev) => { els.input.value = ev.target.result; };
     reader.readAsText(file);
 });
 
-// ==================== Processing Pipeline ====================
-
+// ==================== Helpers ====================
 function getSelectedSteps() {
     const steps = [];
     if ($("#step-decompose").checked) steps.push("decompose");
@@ -64,66 +65,80 @@ function getProcessMode() {
     return document.querySelector('input[name="process-mode"]:checked').value;
 }
 
-function setProcessingState(processing) {
-    isProcessing = processing;
-    btnProcess.disabled = processing;
-    btnProcess.classList.toggle("hidden", processing);
-    btnStop.classList.toggle("hidden", !processing);
-    progressPanel.classList.toggle("hidden", !processing);
-    if (processing) {
-        progressSpinner.classList.remove("hidden");
-        progressLog.innerHTML = "";
-    }
+function setProcessing(on) {
+    isProcessing = on;
+    els.btnProcess.disabled = on;
+    els.btnProcess.classList.toggle("hidden", on);
+    els.btnStop.classList.toggle("hidden", !on);
+    els.progressPanel.classList.toggle("hidden", !on);
 }
 
-function resetStepStatuses() {
-    ["decompose", "organize", "review"].forEach(step => {
-        $(`#status-${step}`).textContent = "";
-        $(`#status-${step}`).className = "text-xs";
+function resetStatuses() {
+    ["decompose", "organize", "review"].forEach(s => {
+        const el = $(`#status-${s}`);
+        el.textContent = "";
+        el.className = "step-status";
     });
 }
 
+function addLog(msg) {
+    const t = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    els.progressLog.innerHTML += `<div><span class="text-text-muted">[${t}]</span> ${msg}</div>`;
+    els.progressLog.scrollTop = els.progressLog.scrollHeight;
+}
+
+function updatePreview(content) {
+    els.preview.innerHTML = marked.parse(content);
+    els.preview.querySelectorAll("pre code").forEach(b => hljs.highlightElement(b));
+    els.wordCount.textContent = `${content.length} 字`;
+}
+
+function renderMarkdown(target, content) {
+    target.innerHTML = marked.parse(content);
+    target.querySelectorAll("pre code").forEach(b => hljs.highlightElement(b));
+}
+
+// ==================== Processing ====================
 async function startProcess(content, steps, mode) {
-    setProcessingState(true);
-    resetStepStatuses();
+    setProcessing(true);
+    resetStatuses();
     remainingSteps = [...steps];
+    streamBuffer = "";
 
     try {
-        const response = await fetch("/api/process", {
+        const res = await fetch("/api/process", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ content, steps, mode }),
         });
-
-        await handleStreamResponse(response);
-    } catch (error) {
-        addLog(`❌ 错误: ${error.message}`);
+        await handleStream(res);
+    } catch (e) {
+        addLog(`错误: ${e.message}`);
     } finally {
-        setProcessingState(false);
-        btnNextStep.classList.add("hidden");
+        setProcessing(false);
+        els.btnNextStep.classList.add("hidden");
     }
 }
 
 async function resumeProcess(content, steps, mode) {
-    setProcessingState(true);
-
+    setProcessing(true);
+    streamBuffer = "";
     try {
-        const response = await fetch("/api/process/resume", {
+        const res = await fetch("/api/process/resume", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ content, remaining_steps: steps, mode }),
         });
-
-        await handleStreamResponse(response);
-    } catch (error) {
-        addLog(`❌ 错误: ${error.message}`);
+        await handleStream(res);
+    } catch (e) {
+        addLog(`错误: ${e.message}`);
     } finally {
-        setProcessingState(false);
-        btnNextStep.classList.add("hidden");
+        setProcessing(false);
+        els.btnNextStep.classList.add("hidden");
     }
 }
 
-async function handleStreamResponse(response) {
+async function handleStream(response) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -131,127 +146,88 @@ async function handleStreamResponse(response) {
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
-
         for (const line of lines) {
             if (!line.trim()) continue;
-            try {
-                const data = JSON.parse(line);
-                handleProcessMessage(data);
-            } catch (e) {
-                console.error("Parse error:", e, line);
-            }
+            try { handleMessage(JSON.parse(line)); } catch (e) {}
         }
     }
 }
 
-function handleProcessMessage(data) {
+function handleMessage(data) {
     switch (data.type) {
         case "step_start":
             addLog(data.message);
-            $(`#status-${data.step}`).textContent = "⏳";
-            $(`#status-${data.step}`).className = "text-xs status-running";
+            $(`#status-${data.step}`).textContent = "●";
+            $(`#status-${data.step}`).className = "step-status status-running";
             break;
-
         case "chunk":
-            // Real-time streaming: update preview as content comes in
-            updatePreviewStreaming(data.content, data.step);
+            streamBuffer += data.content;
+            updatePreview(streamBuffer);
             break;
-
         case "step_end":
-            $(`#status-${data.step}`).textContent = "✅";
-            $(`#status-${data.step}`).className = "text-xs status-done";
-            addLog(`✅ ${data.step} 完成`);
+            $(`#status-${data.step}`).textContent = "✓";
+            $(`#status-${data.step}`).className = "step-status status-done";
+            addLog(`${data.step} 完成`);
             updatePreview(data.content);
-            // Remove completed step from remaining
             remainingSteps = remainingSteps.filter(s => s !== data.step);
             break;
-
         case "step_pause":
-            addLog(`⏸ ${data.message}`);
-            progressSpinner.classList.add("hidden");
+            addLog(data.message);
             if (remainingSteps.length > 0) {
-                btnNextStep.classList.remove("hidden");
-                btnStop.classList.add("hidden");
+                els.btnNextStep.classList.remove("hidden");
+                els.btnStop.classList.add("hidden");
             }
             break;
-
         case "done":
             currentNotes = data.content;
             currentFilename = data.filename;
             updatePreview(data.content);
-            addLog(`📝 笔记已保存: ${data.filename}`);
-            addChatMessage("ai", "笔记已生成完毕！你可以查看右侧预览，或者直接向我提问 🎉");
+            addLog(`已保存: ${data.filename}`);
+            addChat("ai", "笔记已生成完毕，可以查看预览或直接提问。");
             break;
     }
 }
 
-// Streaming preview: append chunks incrementally
-let streamBuffer = "";
-function updatePreviewStreaming(chunk, step) {
-    streamBuffer += chunk;
-    notePreview.innerHTML = marked.parse(streamBuffer);
-    notePreview.querySelectorAll("pre code").forEach(block => hljs.highlightElement(block));
-    notePreview.scrollTop = notePreview.scrollHeight;
-}
-
-function addLog(message) {
-    const time = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    progressLog.innerHTML += `<div><span class="text-dark-400">[${time}]</span> ${message}</div>`;
-    progressLog.scrollTop = progressLog.scrollHeight;
-}
-
-// Event: Process button
-btnProcess.addEventListener("click", () => {
-    const content = inputContent.value.trim();
-    if (!content) return alert("请先输入或上传教学文档内容");
+// Process button
+els.btnProcess.addEventListener("click", () => {
+    const content = els.input.value.trim();
+    if (!content) return alert("请先输入文档内容");
     const steps = getSelectedSteps();
-    if (steps.length === 0) return alert("请至少选择一个处理步骤");
-    streamBuffer = "";
+    if (!steps.length) return alert("请至少选择一个步骤");
     startProcess(content, steps, getProcessMode());
 });
 
-// Event: Next Step button
-btnNextStep.addEventListener("click", () => {
-    const content = inputContent.value.trim();
-    btnNextStep.classList.add("hidden");
-    resumeProcess(content, remainingSteps, getProcessMode());
+els.btnNextStep.addEventListener("click", () => {
+    els.btnNextStep.classList.add("hidden");
+    resumeProcess(els.input.value.trim(), remainingSteps, getProcessMode());
 });
 
-// Event: Stop button
-btnStop.addEventListener("click", () => {
+els.btnStop.addEventListener("click", () => {
     isProcessing = false;
-    addLog("⏹ 已停止处理");
-    setProcessingState(false);
+    addLog("已停止");
+    setProcessing(false);
 });
 
-// ==================== Note Preview & Edit ====================
-
-function updatePreview(content) {
-    notePreview.innerHTML = marked.parse(content);
-    notePreview.querySelectorAll("pre code").forEach(block => hljs.highlightElement(block));
-    wordCount.textContent = `${content.length} 字`;
-}
-
-btnEdit.addEventListener("click", () => {
+// ==================== Note Edit / Export ====================
+els.btnEdit.addEventListener("click", () => {
     if (isEditing) return;
     isEditing = true;
-    noteEditor.value = currentNotes;
-    notePreview.classList.add("hidden");
-    noteEditor.classList.remove("hidden");
-    btnSave.classList.remove("hidden");
-    btnEdit.classList.add("hidden");
-    noteEditor.focus();
+    els.editor.value = currentNotes;
+    els.preview.classList.add("hidden");
+    els.editor.classList.remove("hidden");
+    els.btnSave.classList.remove("hidden");
+    els.btnEdit.classList.add("hidden");
+    els.editor.focus();
 });
 
-btnSave.addEventListener("click", saveNote);
+els.btnSave.addEventListener("click", saveNote);
 
 async function saveNote() {
     if (!isEditing) return;
-    currentNotes = noteEditor.value;
+    currentNotes = els.editor.value;
     if (currentFilename) {
         try {
             await fetch(`/api/notes/${currentFilename}`, {
@@ -259,82 +235,73 @@ async function saveNote() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ content: currentNotes }),
             });
-        } catch (e) { console.error("Save error:", e); }
+        } catch (e) {}
     }
     isEditing = false;
     updatePreview(currentNotes);
-    notePreview.classList.remove("hidden");
-    noteEditor.classList.add("hidden");
-    btnSave.classList.add("hidden");
-    btnEdit.classList.remove("hidden");
+    els.preview.classList.remove("hidden");
+    els.editor.classList.add("hidden");
+    els.btnSave.classList.add("hidden");
+    els.btnEdit.classList.remove("hidden");
 }
 
-// Export MD
-btnExportMd.addEventListener("click", () => {
+els.btnExportMd.addEventListener("click", () => {
     if (!currentNotes) return alert("暂无可导出的笔记");
     const blob = new Blob([currentNotes], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
+    a.href = URL.createObjectURL(blob);
     a.download = currentFilename || "笔记.md";
     a.click();
-    URL.revokeObjectURL(url);
 });
 
-// Export HTML
-btnExportHtml.addEventListener("click", () => {
-    if (!currentFilename) return alert("请先保存笔记再导出");
+els.btnExportHtml.addEventListener("click", () => {
+    if (!currentFilename) return alert("请先保存笔记");
     window.open(`/api/notes/${currentFilename}/export/html`, "_blank");
 });
 
-// ==================== Note Selection for Q&A ====================
-notePreview.addEventListener("mouseup", () => {
-    const selection = window.getSelection();
-    const text = selection.toString().trim();
+// ==================== Note Selection ====================
+els.preview.addEventListener("mouseup", () => {
+    const text = window.getSelection().toString().trim();
     if (text && text.length > 2) {
         selectedText = text;
-        selectedTextContent.textContent = text.length > 80 ? text.substring(0, 80) + "..." : text;
-        selectedTextPreview.classList.remove("hidden");
+        els.selContent.textContent = text.length > 60 ? text.substring(0, 60) + "…" : text;
+        els.selPreview.classList.remove("hidden");
     }
 });
 
-btnClearSelection.addEventListener("click", () => {
+els.btnClearSel.addEventListener("click", () => {
     selectedText = "";
-    selectedTextPreview.classList.add("hidden");
+    els.selPreview.classList.add("hidden");
 });
 
-// ==================== Q&A Chat ====================
+// ==================== Chat ====================
 async function sendQuestion() {
-    const question = chatInput.value.trim();
-    if (!question) return;
+    const q = els.chatInput.value.trim();
+    if (!q) return;
 
-    let fullQuestion = question;
+    let fullQ = q;
     if (selectedText) {
-        fullQuestion = `关于这段内容：\n> ${selectedText}\n\n我的问题：${question}`;
+        fullQ = `关于这段内容：\n> ${selectedText}\n\n问题：${q}`;
         selectedText = "";
-        selectedTextPreview.classList.add("hidden");
+        els.selPreview.classList.add("hidden");
     }
 
-    addChatMessage("user", question);
-    chatHistory.push({ role: "user", content: fullQuestion });
-    chatInput.value = "";
+    addChat("user", q);
+    chatHistory.push({ role: "user", content: fullQ });
+    els.chatInput.value = "";
 
-    const aiMsgEl = addChatMessage("ai", "", true);
+    const aiEl = addChat("ai", "", true);
 
     try {
-        const response = await fetch("/api/ask", {
+        const res = await fetch("/api/ask", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                question: fullQuestion,
-                notes: currentNotes,
-                history: chatHistory.slice(-10)
-            }),
+            body: JSON.stringify({ question: fullQ, notes: currentNotes, history: chatHistory.slice(-10) }),
         });
 
-        const reader = response.body.getReader();
+        const reader = res.body.getReader();
         const decoder = new TextDecoder();
-        let fullResponse = "";
+        let full = "";
 
         while (true) {
             const { done, value } = await reader.read();
@@ -343,162 +310,131 @@ async function sendQuestion() {
             for (const line of text.trim().split("\n")) {
                 if (!line) continue;
                 try {
-                    const data = JSON.parse(line);
-                    if (data.type === "chunk") {
-                        fullResponse += data.content;
-                        aiMsgEl.innerHTML = marked.parse(fullResponse);
-                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                    const d = JSON.parse(line);
+                    if (d.type === "chunk") {
+                        full += d.content;
+                        renderMarkdown(aiEl, full);
+                        els.chatMsgs.scrollTop = els.chatMsgs.scrollHeight;
                     }
                 } catch (e) {}
             }
         }
-
-        aiMsgEl.querySelectorAll("pre code").forEach(block => hljs.highlightElement(block));
-        chatHistory.push({ role: "assistant", content: fullResponse });
-    } catch (error) {
-        aiMsgEl.innerHTML = `<span class="text-red-400">❌ 请求失败: ${error.message}</span>`;
+        chatHistory.push({ role: "assistant", content: full });
+    } catch (e) {
+        aiEl.innerHTML = `<span class="text-rose-400 text-xs">请求失败: ${e.message}</span>`;
     }
 }
 
-function addChatMessage(role, content, isPlaceholder = false) {
+function addChat(role, content, isPlaceholder = false) {
     const div = document.createElement("div");
-    div.className = "flex gap-3 chat-msg";
+    div.className = "chat-msg flex gap-3";
 
     if (role === "user") {
-        div.innerHTML = `
-            <div class="flex-1 flex justify-end">
-                <div class="bg-accent/20 rounded-xl rounded-tr-sm px-4 py-2.5 text-sm text-dark-100 max-w-[80%] whitespace-pre-wrap">${escapeHtml(content)}</div>
-            </div>`;
+        div.innerHTML = `<div class="flex-1 flex justify-end"><div class="chat-bubble-user">${escapeHtml(content)}</div></div>`;
     } else {
         div.innerHTML = `
-            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center text-sm flex-shrink-0">AI</div>
-            <div class="bg-dark-500 rounded-xl rounded-tl-sm px-4 py-2.5 text-sm text-dark-100 max-w-[80%] break-words">
-                ${isPlaceholder ? '<span class="animate-pulse">思考中...</span>' : marked.parse(content)}
-            </div>`;
+            <div class="chat-avatar bg-gradient-to-br from-blue-500 to-violet-500">T</div>
+            <div class="chat-bubble-ai">${isPlaceholder ? '<span class="animate-pulse text-text-muted">思考中…</span>' : marked.parse(content)}</div>`;
     }
 
-    chatMessages.appendChild(div);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-    if (isPlaceholder) return div.querySelector(".bg-dark-500");
-    return div;
+    els.chatMsgs.appendChild(div);
+    els.chatMsgs.scrollTop = els.chatMsgs.scrollHeight;
+    return isPlaceholder ? div.querySelector(".chat-bubble-ai") : div;
 }
 
-function escapeHtml(text) {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
-}
+function escapeHtml(t) { const d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
 
-btnSend.addEventListener("click", sendQuestion);
-chatInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
-});
+els.btnSend.addEventListener("click", sendQuestion);
+els.chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuestion(); } });
 
-btnClearChat.addEventListener("click", () => {
+els.btnClearChat.addEventListener("click", () => {
     chatHistory = [];
-    chatMessages.innerHTML = `
-        <div class="flex gap-3 chat-msg">
-            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center text-sm flex-shrink-0">AI</div>
-            <div class="bg-dark-500 rounded-xl rounded-tl-sm px-4 py-2.5 text-sm text-dark-100 max-w-[80%]">
-                对话已清空，随时可以继续提问 😊
-            </div>
+    els.chatMsgs.innerHTML = `
+        <div class="chat-msg flex gap-3">
+            <div class="chat-avatar bg-gradient-to-br from-blue-500 to-violet-500">T</div>
+            <div class="chat-bubble-ai">对话已清空。</div>
         </div>`;
 });
 
-// ==================== Notes List Modal ====================
-btnNotesList.addEventListener("click", async () => {
-    notesModal.classList.remove("hidden");
-    notesSearch.value = "";
-    await loadNotesList();
-    notesSearch.focus();
+// ==================== Notes Modal ====================
+els.btnNotesList.addEventListener("click", async () => {
+    els.modal.classList.remove("hidden");
+    els.notesSearch.value = "";
+    await loadNotes();
+    els.notesSearch.focus();
 });
 
-btnCloseModal.addEventListener("click", () => notesModal.classList.add("hidden"));
-notesModal.addEventListener("click", (e) => { if (e.target === notesModal) notesModal.classList.add("hidden"); });
+els.btnCloseModal.addEventListener("click", () => els.modal.classList.add("hidden"));
+els.modal.addEventListener("click", (e) => { if (e.target === els.modal) els.modal.classList.add("hidden"); });
 
-let searchTimeout;
-notesSearch.addEventListener("input", () => {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => loadNotesList(notesSearch.value), 300);
+let searchTimer;
+els.notesSearch.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => loadNotes(els.notesSearch.value), 300);
 });
 
-async function loadNotesList(query = "") {
+async function loadNotes(q = "") {
     try {
-        const url = query ? `/api/notes?q=${encodeURIComponent(query)}` : "/api/notes";
-        const response = await fetch(url);
-        const notes = await response.json();
+        const res = await fetch(q ? `/api/notes?q=${encodeURIComponent(q)}` : "/api/notes");
+        const notes = await res.json();
 
-        if (notes.length === 0) {
-            notesList.innerHTML = `<div class="text-center text-dark-300 py-8">${query ? "没有匹配的笔记" : "暂无笔记"}</div>`;
+        if (!notes.length) {
+            els.notesList.innerHTML = `<div class="text-center text-text-muted py-16 text-sm">${q ? "无匹配笔记" : "暂无笔记"}</div>`;
             return;
         }
 
-        notesList.innerHTML = notes.map(note => {
-            const tagHtml = note.tags.slice(0, 3).map(t => `<span class="px-1.5 py-0.5 rounded bg-dark-500 text-dark-300 text-[10px]">${t}</span>`).join("");
+        els.notesList.innerHTML = notes.map(n => {
+            const tags = n.tags.slice(0, 3).map(t => `<span class="tag">${t}</span>`).join("");
             return `
-            <div class="flex items-center gap-3 p-3 rounded-xl hover:bg-dark-500/50 cursor-pointer transition-all note-item" data-filename="${note.filename}">
-                <div class="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center text-lg flex-shrink-0">📄</div>
-                <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-dark-100 truncate">${note.filename}</div>
-                    <div class="flex items-center gap-2 mt-0.5">
-                        <span class="text-xs text-dark-400">${note.created}</span>
-                        <span class="text-xs text-dark-400">${note.word_count} 字</span>
-                    </div>
-                    ${tagHtml ? `<div class="flex gap-1 mt-1 flex-wrap">${tagHtml}</div>` : ""}
+            <div class="note-row" data-filename="${n.filename}">
+                <div class="note-icon">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                 </div>
-                <button class="px-2 py-1 rounded text-xs text-red-400 hover:bg-red-400/10 transition-all delete-note" data-filename="${note.filename}">🗑</button>
+                <div class="note-info">
+                    <div class="note-name">${n.filename}</div>
+                    <div class="note-meta">${n.created} · ${n.word_count} 字</div>
+                    ${tags ? `<div class="note-tags">${tags}</div>` : ""}
+                </div>
+                <button class="btn-icon note-delete" data-filename="${n.filename}" title="删除">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
             </div>`;
         }).join("");
 
-        $$(".note-item").forEach(el => {
+        $$(".note-row").forEach(el => {
             el.addEventListener("click", async (e) => {
-                if (e.target.closest(".delete-note")) return;
-                const filename = el.dataset.filename;
+                if (e.target.closest(".note-delete")) return;
                 try {
-                    const res = await fetch(`/api/notes/${filename}`);
-                    const data = await res.json();
-                    currentNotes = data.content;
-                    currentFilename = data.filename;
+                    const r = await fetch(`/api/notes/${el.dataset.filename}`);
+                    const d = await r.json();
+                    currentNotes = d.content;
+                    currentFilename = d.filename;
                     updatePreview(currentNotes);
-                    notesModal.classList.add("hidden");
-                } catch (e) { console.error("Load error:", e); }
+                    els.modal.classList.add("hidden");
+                } catch (e) {}
             });
         });
 
-        $$(".delete-note").forEach(btn => {
+        $$(".note-delete").forEach(btn => {
             btn.addEventListener("click", async (e) => {
                 e.stopPropagation();
-                const filename = btn.dataset.filename;
-                if (!confirm(`确定删除 ${filename}？`)) return;
+                if (!confirm(`删除 ${btn.dataset.filename}？`)) return;
                 try {
-                    await fetch(`/api/notes/${filename}`, { method: "DELETE" });
-                    await loadNotesList(notesSearch.value);
-                } catch (e) { console.error("Delete error:", e); }
+                    await fetch(`/api/notes/${btn.dataset.filename}`, { method: "DELETE" });
+                    await loadNotes(els.notesSearch.value);
+                } catch (e) {}
             });
         });
-    } catch (error) {
-        notesList.innerHTML = '<div class="text-center text-red-400 py-8">加载失败</div>';
+    } catch (e) {
+        els.notesList.innerHTML = '<div class="text-center text-rose-400 py-12 text-sm">加载失败</div>';
     }
 }
 
 // ==================== Keyboard Shortcuts ====================
 document.addEventListener("keydown", (e) => {
-    // Ctrl+Enter: Start processing
-    if (e.ctrlKey && e.key === "Enter") {
-        e.preventDefault();
-        if (!isProcessing) btnProcess.click();
-    }
-    // Ctrl+S: Save note
-    if (e.ctrlKey && e.key === "s") {
-        e.preventDefault();
-        if (isEditing) saveNote();
-    }
-    // Esc: Close modal
-    if (e.key === "Escape") {
-        if (!notesModal.classList.contains("hidden")) {
-            notesModal.classList.add("hidden");
-        }
-    }
+    if (e.ctrlKey && e.key === "Enter") { e.preventDefault(); if (!isProcessing) els.btnProcess.click(); }
+    if (e.ctrlKey && e.key === "s") { e.preventDefault(); if (isEditing) saveNote(); }
+    if (e.key === "Escape" && !els.modal.classList.contains("hidden")) els.modal.classList.add("hidden");
 });
 
 // ==================== Init ====================
