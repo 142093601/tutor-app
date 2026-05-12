@@ -1,0 +1,163 @@
+/* AI Tutor - Custom Styles */
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+}
+
+/* Markdown Preview Styles */
+.prose-invert {
+    color: #e2e8f0;
+    line-height: 1.8;
+}
+.prose-invert h1 {
+    color: #f8fafc;
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #334155;
+}
+.prose-invert h2 {
+    color: #f8fafc;
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+.prose-invert h3 {
+    color: #e2e8f0;
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+.prose-invert h4 {
+    color: #e2e8f0;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+}
+.prose-invert p {
+    margin-bottom: 0.75rem;
+}
+.prose-invert ul, .prose-invert ol {
+    margin-bottom: 0.75rem;
+    padding-left: 1.5rem;
+}
+.prose-invert li {
+    margin-bottom: 0.25rem;
+}
+.prose-invert ul li::marker {
+    color: #6366f1;
+}
+.prose-invert ol li::marker {
+    color: #6366f1;
+}
+.prose-invert strong {
+    color: #f8fafc;
+    font-weight: 600;
+}
+.prose-invert em {
+    color: #818cf8;
+    font-style: italic;
+}
+.prose-invert code {
+    background: #1e293b;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.875em;
+    color: #818cf8;
+}
+.prose-invert pre {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 0.75rem;
+    padding: 1rem;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+}
+.prose-invert pre code {
+    background: transparent;
+    padding: 0;
+    color: #e2e8f0;
+    font-size: 0.85rem;
+}
+.prose-invert blockquote {
+    border-left: 3px solid #6366f1;
+    padding-left: 1rem;
+    color: #94a3b8;
+    margin-bottom: 0.75rem;
+}
+.prose-invert hr {
+    border-color: #334155;
+    margin: 1.5rem 0;
+}
+.prose-invert table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+.prose-invert th {
+    background: #1e293b;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    border: 1px solid #334155;
+}
+.prose-invert td {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #334155;
+}
+
+/* Chat message animation */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+.chat-msg {
+    animation: fadeInUp 0.3s ease-out;
+}
+
+/* Step status badges */
+.status-running {
+    color: #6366f1;
+    animation: pulse 1.5s infinite;
+}
+.status-done {
+    color: #22c55e;
+}
+.status-error {
+    color: #ef4444;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Gradient text */
+.gradient-text {
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}

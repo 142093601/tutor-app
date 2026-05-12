@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Tutor - 智能教学助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: { 50: '#f8fafc', 100: '#e2e8f0', 200: '#94a3b8', 300: '#64748b', 400: '#475569', 500: '#334155', 600: '#1e293b', 700: '#0f172a', 800: '#020617' },
+                        accent: { DEFAULT: '#6366f1', light: '#818cf8', dark: '#4f46e5' },
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-dark-700 text-dark-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-dark-600/80 backdrop-blur-md border-b border-dark-500/50 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center text-xl">🎓</div>
+                <div>
+                    <h1 class="text-lg font-bold text-white">AI Tutor</h1>
+                    <p class="text-xs text-dark-200">智能教学助手</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="btn-notes-list" class="px-3 py-1.5 rounded-lg text-sm text-dark-200 hover:text-white hover:bg-dark-500 transition-all">
+                    📚 笔记列表
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- Left Panel - Controls -->
+            <div class="lg:col-span-4 space-y-4">
+                <!-- Input Section -->
+                <div class="bg-dark-600 rounded-2xl border border-dark-500/50 overflow-hidden">
+                    <div class="px-4 py-3 border-b border-dark-500/50 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-accent"></span>
+                        <span class="text-sm font-medium text-dark-100">输入文档</span>
+                    </div>
+                    <div class="p-4">
+                        <textarea id="input-content" 
+                            class="w-full h-48 bg-dark-700 rounded-xl border border-dark-500/50 p-3 text-sm text-dark-100 placeholder-dark-300 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 resize-none transition-all"
+                            placeholder="粘贴你的教学文档内容...&#10;&#10;支持纯文本或 Markdown 格式"></textarea>
+                        <div class="mt-3 flex items-center gap-2">
+                            <label class="flex-1">
+                                <input type="file" id="file-input" accept=".txt,.md,.text" class="hidden">
+                                <div class="w-full py-2 rounded-lg border border-dashed border-dark-400 text-center text-sm text-dark-300 hover:border-accent hover:text-accent cursor-pointer transition-all">
+                                    📎 点击上传文件
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pipeline Steps -->
+                <div class="bg-dark-600 rounded-2xl border border-dark-500/50 overflow-hidden">
+                    <div class="px-4 py-3 border-b border-dark-500/50 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-accent"></span>
+                        <span class="text-sm font-medium text-dark-100">处理流程</span>
+                    </div>
+                    <div class="p-4 space-y-3">
+                        <label class="flex items-center gap-3 p-2 rounded-lg hover:bg-dark-500/50 cursor-pointer transition-all">
+                            <input type="checkbox" id="step-decompose" checked class="step-checkbox accent-accent w-4 h-4">
+                            <div class="flex-1">
+                                <div class="text-sm font-medium">🔍 知识分解</div>
+                                <div class="text-xs text-dark-300">将文档拆解为独立知识点</div>
+                            </div>
+                            <span id="status-decompose" class="text-xs"></span>
+                        </label>
+                        <label class="flex items-center gap-3 p-2 rounded-lg hover:bg-dark-500/50 cursor-pointer transition-all">
+                            <input type="checkbox" id="step-organize" checked class="step-checkbox accent-accent w-4 h-4">
+                            <div class="flex-1">
+                                <div class="text-sm font-medium">🔗 知识梳理</div>
+                                <div class="text-xs text-dark-300">建立关联，标注重点</div>
+                            </div>
+                            <span id="status-organize" class="text-xs"></span>
+                        </label>
+                        <label class="flex items-center gap-3 p-2 rounded-lg hover:bg-dark-500/50 cursor-pointer transition-all">
+                            <input type="checkbox" id="step-review" checked class="step-checkbox accent-accent w-4 h-4">
+                            <div class="flex-1">
+                                <div class="text-sm font-medium">✅ 审核校验</div>
+                                <div class="text-xs text-dark-300">纠错、补充、完善</div>
+                            </div>
+                            <span id="status-review" class="text-xs"></span>
+                        </label>
+                        
+                        <div class="pt-2 flex gap-2">
+                            <button id="btn-process" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-accent to-purple-500 text-white text-sm font-medium hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                🚀 开始处理
+                            </button>
+                            <button id="btn-stop" class="px-4 py-2.5 rounded-xl bg-dark-500 text-dark-200 text-sm hover:bg-dark-400 transition-all hidden">
+                                ⏹ 停止
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress -->
+                <div id="progress-panel" class="bg-dark-600 rounded-2xl border border-dark-500/50 overflow-hidden hidden">
+                    <div class="px-4 py-3 border-b border-dark-500/50 flex items-center gap-2">
+                        <div class="animate-spin w-3 h-3 border-2 border-accent border-t-transparent rounded-full"></div>
+                        <span class="text-sm font-medium text-dark-100">处理进度</span>
+                    </div>
+                    <div class="p-4">
+                        <div id="progress-log" class="text-xs text-dark-300 space-y-1 font-mono max-h-32 overflow-y-auto"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Notes Preview -->
+            <div class="lg:col-span-8 space-y-4">
+                <div class="bg-dark-600 rounded-2xl border border-dark-500/50 overflow-hidden min-h-[600px] flex flex-col">
+                    <div class="px-4 py-3 border-b border-dark-500/50 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-success"></span>
+                            <span class="text-sm font-medium text-dark-100">笔记预览</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="btn-edit" class="px-2 py-1 rounded text-xs text-dark-300 hover:text-white hover:bg-dark-500 transition-all">✏️ 编辑</button>
+                            <button id="btn-save" class="px-2 py-1 rounded text-xs text-dark-300 hover:text-white hover:bg-dark-500 transition-all hidden">💾 保存</button>
+                            <button id="btn-export" class="px-2 py-1 rounded text-xs text-dark-300 hover:text-white hover:bg-dark-500 transition-all">📥 导出</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 p-6 overflow-y-auto">
+                        <!-- Preview Mode -->
+                        <div id="note-preview" class="prose prose-invert max-w-none">
+                            <div class="text-center text-dark-300 py-20">
+                                <div class="text-5xl mb-4">📝</div>
+                                <p class="text-lg">粘贴文档并点击「开始处理」</p>
+                                <p class="text-sm mt-2">AI 将为你生成结构化的学习笔记</p>
+                            </div>
+                        </div>
+                        <!-- Edit Mode -->
+                        <textarea id="note-editor" class="w-full h-full bg-dark-700 rounded-xl border border-dark-500/50 p-4 text-sm text-dark-100 font-mono resize-none focus:outline-none focus:border-accent/50 hidden" spellcheck="false"></textarea>
+                    </div>
+                </div>
+
+                <!-- Q&A Chat -->
+                <div class="bg-dark-600 rounded-2xl border border-dark-500/50 overflow-hidden">
+                    <div class="px-4 py-3 border-b border-dark-500/50 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-warning"></span>
+                        <span class="text-sm font-medium text-dark-100">💬 答疑对话</span>
+                    </div>
+                    <div id="chat-messages" class="p-4 max-h-64 overflow-y-auto space-y-3">
+                        <div class="flex gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center text-sm flex-shrink-0">AI</div>
+                            <div class="bg-dark-500 rounded-xl rounded-tl-sm px-4 py-2.5 text-sm text-dark-100 max-w-[80%]">
+                                你好！我是你的 AI 教师。处理完文档后，你可以随时向我提问，我会基于笔记内容为你解答。😊
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-4 border-t border-dark-500/50">
+                        <div class="flex gap-2">
+                            <input id="chat-input" type="text" 
+                                class="flex-1 bg-dark-700 rounded-xl border border-dark-500/50 px-4 py-2.5 text-sm text-dark-100 placeholder-dark-300 focus:outline-none focus:border-accent/50 transition-all"
+                                placeholder="输入你的问题...">
+                            <button id="btn-send" class="px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent-dark transition-all">
+                                发送
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Notes List Modal -->
+    <div id="notes-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-dark-600 rounded-2xl border border-dark-500/50 w-full max-w-lg max-h-[80vh] overflow-hidden">
+            <div class="px-4 py-3 border-b border-dark-500/50 flex items-center justify-between">
+                <span class="text-sm font-medium text-dark-100">📚 笔记列表</span>
+                <button id="btn-close-modal" class="text-dark-300 hover:text-white">✕</button>
+            </div>
+            <div id="notes-list" class="p-4 overflow-y-auto max-h-[60vh] space-y-2">
+                <div class="text-center text-dark-300 py-8">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
